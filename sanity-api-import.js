@@ -12,6 +12,7 @@ class SanityAPIImporter {
     this.dataset = dataset;
     this.token = token;
     this.baseUrl = `https://${projectId}.api.sanity.io/v2024-01-01/data/mutate/${dataset}`;
+    this.apiVersion = '2024-01-01';
   }
 
   async importContent() {
@@ -218,10 +219,12 @@ class SanityAPIImporter {
 
 // Usage function
 async function runSanityImport() {
-  // You'll need to provide these values from your Sanity project
-  const projectId = process.env.SANITY_PROJECT_ID || 'YOUR_PROJECT_ID';
-  const dataset = process.env.SANITY_DATASET || 'production';
-  const token = process.env.SANITY_TOKEN || 'YOUR_WRITE_TOKEN';
+  // Load environment variables
+  require('dotenv').config({ path: '.env.local' });
+  
+  const projectId = process.env.SANITY_API_PROJECT_ID || process.env.SANITY_STUDIO_PROJECT_ID;
+  const dataset = process.env.SANITY_DATASET || process.env.SANITY_STUDIO_DATASET;
+  const token = process.env.SANITY_API_WRITE_TOKEN;
 
   if (!projectId || projectId === 'YOUR_PROJECT_ID') {
     console.log('❌ Please set your Sanity project details:');
