@@ -27,6 +27,7 @@
     "date-fns": "^4.1.0",
     "next": "^15.0.0",
     "next-sanity": "^9.7.0",
+    "playwright": "^1.55.0",
     "postcss": "^8.4.47",
     "puppeteer": "^24.17.1",
     "react": "^18.3.1",
