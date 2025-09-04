@@ -1,0 +1,94 @@
+name: PR-Agent - Time Estimation & Analysis
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  pr-agent:
+    if: ${{ (github.event_name == 'pull_request') || (github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/')) }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+      contents: read
+    steps:
+      - name: PR Agent action step
+        id: pragent
+        uses: Codium-ai/pr-agent@main
+        env:
+          OPENAI_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          command: >
+            ${{ 
+              github.event_name == 'pull_request' && 'auto' ||
+              (contains(github.event.comment.body, '/estimate_time') && 'estimate_time') ||
+              (contains(github.event.comment.body, '/review') && 'review') ||
+              (contains(github.event.comment.body, '/describe') && 'describe') ||
+              'auto'
+            }}
+
+      - name: Add Time Estimate Labels
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+            
+            // Look for PR-Agent time estimation comment
+            const estimateComment = comments.find(comment => 
+              comment.user.login === 'github-actions[bot]' && 
+              comment.body.includes('Estimated effort')
+            );
+            
+            if (estimateComment) {
+              // Extract hours from comment using regex
+              const hoursMatch = estimateComment.body.match(/(\d+(?:\.\d+)?)\s*hours?/i);
+              if (hoursMatch) {
+                const hours = parseFloat(hoursMatch[1]);
+                const timeLabel = `⏱️ ${Math.ceil(hours)}h`;
+                
+                // Calculate expected completion date (assuming 6 hours per day)
+                const workingHours = 6;
+                const daysToComplete = Math.ceil(hours / workingHours);
+                const completionDate = new Date();
+                completionDate.setDate(completionDate.getDate() + daysToComplete);
+                const dateLabel = `📅 Due: ${completionDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+                
+                // Add labels
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  labels: [timeLabel, dateLabel]
+                });
+                
+                console.log(`Added labels: ${timeLabel}, ${dateLabel}`);
+              }
+            }
+
+      - name: Track PR Creation Event
+        if: github.event_name == 'pull_request' && github.event.action == 'opened'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = '.github/scripts/track-metrics.js';
+            
+            if (fs.existsSync(path)) {
+              const { trackPREvent } = require(path);
+              await trackPREvent(github, context, 'pr_opened');
+            }

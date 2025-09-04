@@ -1,0 +1,124 @@
+[github]
+# GitHub configuration
+publish_output_progress = true
+add_line_numbers_to_hunks = true
+base_branches_to_filter = ["main", "master"]
+
+[pr_reviewer]
+# PR Review settings
+require_focused_review = true
+require_score = true
+require_tests = true
+require_estimate_effort_to_review = true
+require_can_be_split_review = false
+num_code_suggestions = 6
+inline_code_comments = true
+persistent_comment = true
+extra_instructions = """
+Focus on:
+- Code quality and maintainability
+- Performance implications
+- Security considerations
+- Time estimation accuracy
+- Potential technical debt
+"""
+
+[pr_code_suggestions]
+# Code suggestions settings
+num_code_suggestions = 4
+extra_instructions = "Prioritize suggestions that improve maintainability and reduce technical debt"
+rank_suggestions = true
+
+[pr_description]
+# PR Description settings
+publish_description_as_comment = true
+add_original_user_description = true
+keep_original_user_title = true
+extra_instructions = """
+Include:
+- Clear summary of changes
+- Impact assessment
+- Testing approach
+- Deployment considerations
+- Time estimate reasoning
+"""
+
+[pr_estimate_time]
+# Time estimation settings - THIS IS KEY FOR YOUR REQUIREMENTS
+enable_estimate = true
+estimate_effort_hours = true  # Use hours instead of story points
+require_estimate = true
+publish_estimated_effort = true
+extra_instructions = """
+Provide time estimates in hours considering:
+- Development complexity
+- Testing requirements  
+- Code review time
+- Integration complexity
+- Documentation needs
+
+Format: Provide estimate as "X hours" where X is a number.
+Always explain the reasoning behind the estimate.
+Consider team's historical velocity and complexity factors.
+"""
+
+[pr_estimate_time.effort_estimation]
+# More detailed effort estimation
+base_effort = 1.0  # Base hours for simple changes
+complexity_factor = 1.5  # Multiplier for complex changes
+testing_factor = 0.3  # Additional hours for testing
+review_factor = 0.2  # Additional hours for code review
+integration_factor = 0.4  # Additional hours for integration
+
+[pr_questions]
+# Questions for PR author
+ask_questions = true
+questions_to_ask = 3
+
+[config]
+# General configuration
+model = "gpt-4o"
+temperature = 0.2
+language = "en"
+verbosity_level = 1
+use_repo_settings_file = true
+publish_output = true
+
+[config.ai_timeouts]
+global_timeout = 120
+per_chunk_timeout = 60
+
+[github_app]
+# GitHub App settings (if using GitHub App instead of personal token)
+override_deployment_type = "user"
+
+# Custom labels for time estimates and estimated completion dates
+[labels]
+time_estimate_prefix = "⏱️ "
+completion_date_prefix = "📅 Est: "
+on_track_label = "🟢 On Track"
+at_risk_label = "🟡 At Risk" 
+delayed_label = "🔴 Delayed"
+
+# Zenhub integration settings
+[zenhub]
+# These will be used by our custom scripts
+track_pipeline_changes = true
+pipeline_mapping = [
+    { name = "Clock", stage = "planning" },
+    { name = "Icebox", stage = "backlog" },
+    { name = "Backlog", stage = "ready" },
+    { name = "In Progress", stage = "development" },
+    { name = "Review", stage = "review" },
+    { name = "QA", stage = "testing" },
+    { name = "Done", stage = "completed" }
+]
+
+# DORA Metrics configuration
+[dora_metrics]
+track_deployment_frequency = true
+track_lead_time = true
+track_change_failure_rate = true
+track_recovery_time = true
+weekly_report = true
+monthly_summary = true

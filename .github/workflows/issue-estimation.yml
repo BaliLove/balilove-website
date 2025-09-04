@@ -1,0 +1,163 @@
+name: Issue Estimation & Progress Tracking
+
+on:
+  issues:
+    types: [opened, labeled, unlabeled, edited]
+  schedule:
+    # Daily progress analysis: 7 AM +8 timezone = 11 PM UTC previous day
+    - cron: '0 23 * * *'
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to re-estimate'
+        required: false
+
+jobs:
+  estimate-new-issue:
+    if: github.event_name == 'issues' && github.event.action == 'opened'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: AI Estimate Issue Effort
+        uses: actions/github-script@v7
+        env:
+          OPENAI_KEY: ${{ secrets.OPENAI_API_KEY }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { estimateIssueEffort } = require('./.github/scripts/issue-estimator.js');
+            
+            const issueData = {
+              number: context.payload.issue.number,
+              title: context.payload.issue.title,
+              body: context.payload.issue.body || '',
+              labels: context.payload.issue.labels
+            };
+            
+            try {
+              const openaiKey = process.env.OPENAI_KEY;
+              const estimate = await estimateIssueEffort(github, context, issueData, openaiKey);
+              
+              if (estimate.success) {
+                console.log(`✅ Issue #${issueData.number} estimated at ${estimate.hours} hours, completion: ${estimate.completionDate}`);
+              } else {
+                console.log(`⚠️ Fallback estimate applied to issue #${issueData.number}`);
+              }
+            } catch (error) {
+              console.error('❌ Error estimating issue effort:', error);
+            }
+
+  daily-progress-analysis:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Analyze Yesterday's Progress & Update Estimates
+        uses: actions/github-script@v7
+        env:
+          OPENAI_KEY: ${{ secrets.OPENAI_API_KEY }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { analyzeYesterdayProgress, generateStandupReport } = require('./.github/scripts/daily-standup.js');
+            
+            try {
+              console.log('🔍 Starting daily progress analysis (7 AM +8 timezone)...');
+              
+              const openaiKey = process.env.OPENAI_KEY;
+              
+              // Analyze yesterday's commits and progress
+              const progressAnalysis = await analyzeYesterdayProgress(github, context, openaiKey);
+              
+              console.log(`📊 Analysis complete: ${progressAnalysis.totalCommits} commits, ${progressAnalysis.issuesWorkedOn} issues worked on`);
+              
+              // Generate and post standup report
+              await generateStandupReport(github, context, progressAnalysis);
+              
+              console.log('✅ Daily progress analysis and reporting complete');
+              
+              // Log summary for GitHub Actions
+              const estimateUpdates = Object.values(progressAnalysis.progressAnalysis || {})
+                .filter(analysis => analysis.shouldUpdateEstimate).length;
+              
+              console.log(`📈 Summary: ${estimateUpdates} estimate adjustments made`);
+              
+            } catch (error) {
+              console.error('❌ Error in daily progress analysis:', error);
+              
+              // Post error to tracking issue if possible
+              try {
+                const { data: issues } = await github.rest.issues.listForRepo({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  state: 'open',
+                  labels: 'metrics-tracking'
+                });
+                
+                if (issues[0]) {
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issues[0].number,
+                    body: `## ❌ Daily Analysis Error\n\nDaily progress analysis failed: ${error.message}\n\n*Check GitHub Actions logs for details.*`
+                  });
+                }
+              } catch (commentError) {
+                console.error('Could not post error comment:', commentError);
+              }
+              
+              throw error;
+            }
+
+  manual-re-estimate:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Re-estimate Specific Issue
+        uses: actions/github-script@v7
+        env:
+          OPENAI_KEY: ${{ secrets.OPENAI_API_KEY }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { reEstimateIssue } = require('./.github/scripts/issue-estimator.js');
+            
+            const issueNumber = '${{ github.event.inputs.issue_number }}';
+            
+            if (issueNumber) {
+              try {
+                await reEstimateIssue(github, context, parseInt(issueNumber));
+                console.log(`Re-estimated issue #${issueNumber}`);
+              } catch (error) {
+                console.error(`Error re-estimating issue #${issueNumber}:`, error);
+              }
+            } else {
+              console.log('No issue number provided for manual re-estimation');
+            }
