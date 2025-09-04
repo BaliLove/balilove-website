@@ -177,9 +177,9 @@ function parseEstimateResponse(response) {
 }
 
 /**
- * Calculate estimated completion date based on hours and current workload
+ * Calculate estimated completion date based on hours, workload, and milestone constraints
  */
-function calculateCompletionDate(estimatedHours) {
+function calculateCompletionDate(estimatedHours, issueData) {
   const WORKING_HOURS_PER_DAY = 6;
   const workingDaysNeeded = Math.ceil(estimatedHours / WORKING_HOURS_PER_DAY);
   
@@ -193,6 +193,18 @@ function calculateCompletionDate(estimatedHours) {
     const dayOfWeek = completionDate.getDay();
     if (dayOfWeek !== 0 && dayOfWeek !== 6) {
       workingDaysAdded++;
+    }
+  }
+  
+  // Check if estimated completion is after milestone due date
+  if (issueData && issueData.milestone && issueData.milestone.due_on) {
+    const milestoneDate = new Date(issueData.milestone.due_on);
+    if (completionDate > milestoneDate) {
+      // Issue might be at risk - but still show realistic estimate
+      return `${completionDate.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric' 
+      })} ⚠️`;
     }
   }
   
